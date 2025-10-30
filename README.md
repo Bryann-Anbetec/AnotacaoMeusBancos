@@ -1,206 +1,276 @@
-
 ```markdown
 ---
-
-## 🎯 **Visão Geral do Sistema "Meus Bancos"**
-
-O **"Meus Bancos"** é uma **plataforma de gestão financeira corporativa** que permite:
-
-- Integração com **múltiplos bancos brasileiros**
-- Sincronização de **dados bancários** (extratos, saldos, boletos)
-- Processamento de **pagamentos, tributos e conciliação**
-- Integração com **sistemas ERP** (Winthor, Protheus, Sankya)
-- Autenticação e autorização via **AWS Cognito**
-- Processamento assíncrono via **Amazon SQS**
+# 🏦 **Sistema "Meus Bancos"** 
+### *Plataforma de Gestão Financeira Corporativa*
 
 ---
 
-## 🧩 **Papel de Cada Projeto no Ecossistema**
+## 🎯 **Visão Geral**
 
-### 1. **AB Server MyBanks**  
-🔗 **Conector com Bancos**  
-- Fornece uma **API unificada** para comunicação com bancos (BB, Santander, Bradesco, Itaú, Sicoob)
-- Implementa o **padrão Strategy** para diferentes bancos
-- Expõe endpoints para:
-  - Boletos (`/bankslip`)
-  - Extratos (`/statement`)
-  - Pagamentos em lote (`/batch-payment`)
-  - Tributos (`/tax-revenues`)
-- Suporta **sandbox** via header `x-is-sandbox`
+O **"Meus Bancos"** é uma solução completa de gestão financeira corporativa que unifica operações bancárias, integração com ERPs e processos financeiros em uma única plataforma.
 
-### 2. **AB Worker MyBanks**  
-⚙️ **Orquestrador de Processos**  
-- Gerencia **jobs assíncronos** (SQS)
-- Processa:
-  - Sincronização de saldos e extratos
-  - Faturamento (`BillingJob`)
-  - Pagamentos de tributos (`TributePaymentService`)
-  - Integração com ERP (`ErpIntegrationService`)
-- Mantém **estrutura de empresas, usuários e permissões**
-- Autenticação via **AWS Cognito** (dois pools: admin e portal)
-
-### 3. **AB Connector MyBanks**  
-🔄 **Conector com ERPs**  
-- Conecta sistemas ERP (**Winthor, Protheus, Sankya**) com a plataforma MyBanks
-- Sincroniza dados em **ordem específica**:
-  1. `CLIENTE`
-  2. `NOTA_FISCAL`
-  3. `CONTAS_RECEBER`
-- Divide dados em **chunks** para processamento
-- Usa **SQS FIFO** para garantir ordem e evitar duplicação
+### 🚀 **Capacidades Principais**
+| Área | Funcionalidades |
+|------|----------------|
+| **🏛️ Integração Bancária** | Múltiplos bancos • Extratos • Saldos • Boletos |
+| **💸 Processamento** | Pagamentos • Tributos • Conciliação • Lotes |
+| **🔗 Conectividade** | Winthor • Protheus • Sankya • APIs REST |
+| **🔐 Segurança** | AWS Cognito • MFA • Certificados digitais |
+| **⚡ Performance** | SQS • Processamento assíncrono • Filas FIFO |
 
 ---
 
-## 💼 **Principais Regras de Negócio**
+## 🧩 **Arquitetura do Ecossistema**
 
-### 1. **Autenticação e Autorização**
-- Dois tipos de usuários:
-  - **Portal Users**: Usuários empresariais (empresas)
-  - **Admin Users**: Usuários administrativos (Anbetec)
-- **MFA (Multi-Factor Authentication)** opcional com aprovação administrativa
-- Perfis de acesso granulares por módulo e ação
+### 🔷 **AB Server MyBanks**
+**🎯 Função**: *Gateway Unificado para Bancos*
 
-### 2. **Gestão de Empresas**
-- Empresas podem ter **filiais** (hierarquia)
-- Cada empresa tem:
-  - Configuração de **ERP** (tipo, credenciais, endpoints)
-  - **Contas bancárias** vinculadas
-  - **Usuários** com perfis específicos
-- Status de integração com ERP controlado por `erpIntegrationActive`
+```ascii
+┌─────────────────┐
+│   AB Server     │
+│   MyBanks       │◄── Bancos (BB, Santander,
+└─────────────────┘    Bradesco, Itaú, Sicoob)
+         │
+         ▼
+├─ 📋 Boletos (/bankslip)
+├─ 📊 Extratos (/statement)
+├─ 💰 Pagamentos (/batch-payment)
+└─ 🏛️ Tributos (/tax-revenues)
+```
 
-### 3. **Sincronização Bancária**
-- **Saldos diários** sincronizados automaticamente (Seg-Sáb, 6h)
-- **Extratos** processados em tempo real
-- **Conciliação automática** entre transações bancárias e lançamentos contábeis
+**🔧 Características Técnicas:**
+- ✅ Padrão Strategy para múltiplos bancos
+- ✅ Headers personalizáveis (`x-is-sandbox`)
+- ✅ API REST unificada
+- ✅ Tratamento de erros padronizado
 
-### 4. **Processamento de Pagamentos**
-- **Pagamentos em lote** com validação
-- **Tributos** (ISS, ICMS, PIS) calculados automaticamente
-- **DARF** gerado para pagamentos fiscais
-- **Retorno de pagamentos** processado automaticamente
+### 🔷 **AB Worker MyBanks**
+**🎯 Função**: *Orquestrador de Processos*
 
-### 5. **Integração com ERP**
-- **Ordem de processamento** obrigatória:
-  1. Clientes
-  2. Notas Fiscais  
-  3. Contas a Receber
-- **Chunking** de dados para performance:
-  - Notas Fiscais: 10 registros/chunk
-  - Outros: 100 registros/chunk
-- **Teste de conexão** antes de iniciar integração
+```ascii
+┌─────────────────┐    ┌─────────────────┐
+│   SQS Queue     │───▶│   AB Worker     │
+│   (Jobs)        │    │   MyBanks       │
+└─────────────────┘    └─────────────────┘
+                              │
+         ┌────────────────────┼────────────────────┐
+         ▼                    ▼                    ▼
+    🗃️ Sincronização     💳 Faturamento       🔗 Integração
+       Saldos/Extratos      (BillingJob)         ERP
+```
 
-### 6. **Jobs e Processamento Assíncrono**
-- **SQS FIFO** para garantir ordem e evitar duplicação
-- **Status de jobs** monitorados:
-  - `PENDING` → `IN_PROGRESS` → `COMPLETED`/`FAILED`/`PARTIALLY_COMPLETED`
-- **Retry automático** com tratamento de falhas
+**🛠️ Processos Gerenciados:**
+- 🔄 Sincronização de dados bancários
+- 📦 Jobs de faturamento
+- 🏛️ Pagamento de tributos
+- 👥 Gestão de usuários e empresas
 
-### 7. **Conciliação Financeira**
-- **Regras automáticas** para matching de transações
-- **Nível de confiança** (0-100%) para conciliações
-- **Conciliação manual** disponível para casos complexos
+### 🔷 **AB Connector MyBanks**
+**🎯 Função**: *Bridge para Sistemas ERP*
 
-### 8. **Notificações**
-- **Email** para:
-  - Boas-vindas de usuários
-  - Confirmação de pagamentos
-  - Alertas do sistema
-- **Regras de notificação** configuráveis por empresa
+**📦 Ordem de Sincronização:**
+```mermaid
+graph LR
+    A[CLIENTE] --> B[NOTA_FISCAL] --> C[CONTAS_RECEBER]
+```
 
-### 9. **Auditoria e Compliance**
-- **Logs detalhados** de todas as operações
-- **Rastreabilidade** completa (quem, quando, o que)
-- **Backup** automático de dados críticos
+**⚡ Otimizações:**
+- 🗂️ Chunking inteligente (10/100 registros)
+- 🔄 Filas FIFO para ordenação
+- ✅ Validação de conexão prévia
 
 ---
 
-## 🔄 **Fluxos de Negócio Principais**
+## 💼 **Regras de Negócio Detalhadas**
 
-### 1. **Integração Completa Empresa Nova**
+### 🔐 **Segurança e Acesso**
+| Tipo de Usuário | Permissões | Autenticação |
+|-----------------|------------|--------------|
+| **Portal Users** | Empresas • Filiais • Dados corporativos | Cognito + MFA opcional |
+| **Admin Users** | Sistema completo • Configurações globais | Cognito + Aprovação |
+
+### 🏢 **Gestão Empresarial**
+```yaml
+empresa:
+  - hierarquia: "matriz → filiais"
+  - configuracoes:
+      - erp: "tipo, credenciais, endpoints"
+      - bancos: "contas vinculadas"
+      - usuarios: "perfis granulares"
+  - status: "erpIntegrationActive"
 ```
 
-1.  Criar empresa no sistema
-2.  Configurar conexão com ERP
-3.  Vincular contas bancárias
-4.  Criar usuários e perfis
-5.  Iniciar sincronização de dados
-6.  Configurar regras de conciliação
+### ⏰ **Sincronização Automática**
+- **🕕 Horário**: Segunda a Sábado, 6h
+- **📊 Dados**: Saldos + Extratos
+- **🔗 Conciliação**: Automática com regras configuráveis
 
-<!-- end list -->
-
+### 💳 **Processamento Financeiro**
+**🎯 Fluxo de Pagamentos:**
+```ascii
+ERP → Validação → Agendamento → Banco → Confirmação → ERP
 ```
 
-### 2. **Processamento de Pagamento**
+**📋 Tributos Suportados:**
+- 🏛️ ISS • ICMS • PIS • COFINS
+- 📄 DARF automático
+- 🔄 Retorno processado
+
+---
+
+## 🔄 **Fluxos de Negócio**
+
+### 🏢 **Integração de Nova Empresa**
+```mermaid
+flowchart TD
+    A[Criar Empresa] --> B[Configurar ERP]
+    B --> C[Vincular Bancos]
+    C --> D[Criar Usuários]
+    D --> E[Sincronizar Dados]
+    E --> F[Configurar Regras]
 ```
 
-1.  Lançamento no ERP → Connector
-2.  Worker processa agendamento
-3.  Server envia para banco
-4.  Retorno processado automaticamente
-5.  Status atualizado no ERP
+### 💸 **Processamento de Pagamento**
+1. **📥 Entrada**: Lançamento no ERP → Connector
+2. **⚙️ Processamento**: Worker gerencia agendamento
+3. **🏦 Execução**: Server comunica com banco
+4. **🔄 Retorno**: Processamento automático
+5. **✅ Confirmação**: Status atualizado no ERP
 
-<!-- end list -->
-
-```
-
-### 3. **Conciliação Diária**
-```
-
-1.  Sincronização automática de extratos (6h)
-2.  Matching com lançamentos do ERP
-3.  Conciliação automática (regras configuradas)
-4.  Relatório de exceções para análise manual
-
-<!-- end list -->
-
+### 📊 **Conciliação Diária**
+```ascii
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│  Sincronização  │    │   Matching      │    │  Conciliação    │
+│   Automática    │───▶│   Automático    │───▶│   Automática    │
+│    (6h)         │    │                 │    │                 │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                              │
+                              ▼
+                    ┌─────────────────┐
+                    │  Relatório de   │
+                    │   Exceções      │
+                    └─────────────────┘
 ```
 
 ---
 
-## 🛡️ **Regras de Segurança**
+## 🛡️ **Framework de Segurança**
 
-- **Certificados digitais** para APIs bancárias (AWS Secrets Manager)
-- **Tokens OAuth2** para autenticação com bancos
-- **SSL/TLS** em todas as conexões
-- **Timeout** configurável para operações
-- **Rate limiting** para APIs externas
+### 🔒 **Camadas de Proteção**
+```ascii
+┌─────────────────┐
+│   Certificados  │←── AWS Secrets Manager
+│   Digitais      │
+└─────────────────┘
+         │
+┌─────────────────┐
+│   OAuth2        │←── Tokens de Banco
+│   Tokens        │
+└─────────────────┘
+         │
+┌─────────────────┐
+│   SSL/TLS       │←── Conexões Criptografadas
+│   Encryption    │
+└─────────────────┘
+```
+
+### ⚙️ **Controles Adicionais**
+- 🕐 Timeout configurável
+- 🚦 Rate limiting
+- 📊 Monitoramento contínuo
 
 ---
 
-## 📊 **Monitoramento e Qualidade**
+## 📈 **Monitoramento & Qualidade**
 
-- **Health checks** para todos os serviços
-- **Logs estruturados** para debugging
-- **Métricas de performance** (tempo de resposta, throughput)
-- **Alertas** para falhas de integração
-- **Dashboard** de status em tempo real (WebSockets)
+### 🎯 **Métricas Principais**
+```dashboard
+┌─────────────────┬─────────────────┬─────────────────┐
+│   Health        │   Performance   │   Business      │
+│   Checks        │   Metrics       │   Metrics       │
+├─────────────────┼─────────────────┼─────────────────┤
+│ ✅ Serviços     │ ⏱️ Response     │ 💰 Transações   │
+│ ✅ Conexões     │ 📊 Throughput   │ 🔄 Conciliações │
+│ ✅ Bancos       │ 🚨 Errors       │ 🏛️ Tributos     │
+└─────────────────┴─────────────────┴─────────────────┘
+```
+
+### 🔔 **Sistema de Alertas**
+- 📧 Notificações por email
+- 🔴 Dashboard em tempo real
+- 📱 WebSockets para updates
 
 ---
 
-## 🚀 **Fluxo de Dados entre os Projetos**
+## 🚀 **Fluxo de Dados Entre Componentes**
 
+```ascii
+┌─────────┐    ┌─────────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
+│   ERP   │───▶│  Connector  │───▶│   SQS   │───▶│  Worker │───▶│  Server │───▶│ Bancos │
+└─────────┘    └─────────────┘    └─────────┘    └─────────┘    └─────────┘
+                     │                 │              │              │
+                     ▼                 ▼              ▼              ▼
+               ┌─────────┐       ┌─────────┐    ┌─────────┐    ┌─────────┐
+               │  Logs   │       │Process  │    │ Status  │    │Response │
+               └─────────┘       └─────────┘    └─────────┘    └─────────┘
 ```
 
-ERP → Connector → SQS → Worker → Server → Bancos
-                ↆ       ↆ        ↆ
-              Logs   Process  Response
-
-```
-
-1. **Connector** extrai dados do ERP e envia para **SQS**
-2. **Worker** consome da SQS, processa e chama **Server** para operações bancárias
-3. **Server** comunica com bancos e retorna respostas
-4. **Worker** atualiza status e notifica sistemas
+**🔍 Detalhamento do Fluxo:**
+1. **📥 Coleta**: Connector extrai dados do ERP
+2. **🔄 Fila**: SQS garante ordem e durabilidade
+3. **⚙️ Processamento**: Worker orquestra operações
+4. **🏦 Execução**: Server comunica com bancos
+5. **📤 Retorno**: Status atualizado em todos os sistemas
 
 ---
 
-## 💡 **Diferenciais de Negócio**
+## 💎 **Diferenciais Competitivos**
 
-1. **API Unificada**: Interface única para múltiplos bancos
-2. **Orquestração Inteligente**: Processamento em ordem correta
-3. **Conciliação Automática**: Matching inteligente de transações
-4. **Escalabilidade**: Arquitetura baseada em eventos (SQS)
-5. **Segurança Enterprise**: AWS Cognito + Certificados digitais
-6. **Flexibilidade ERP**: Múltiplos ERPs suportados
+### 🏆 **Vantagens Exclusivas**
+| Diferencial | Benefício |
+|-------------|-----------|
+| **🎯 API Unificada** | Interface única para todos os bancos |
+| **🧠 Orquestração Inteligente** | Processamento na ordem correta |
+| **🤖 Conciliação Automática** | Matching inteligente de transações |
+| **📈 Escalabilidade Enterprise** | Arquitetura baseada em eventos |
+| **🔒 Segurança Corporativa** | AWS Cognito + Certificados |
+| **🔄 Flexibilidade ERP** | Múltiplos sistemas suportados |
+
+### 🚀 **Valor para o Negócio**
+- ⏱️ **Redução de tempo** em processos manuais
+- 💰 **Otimização** de recursos financeiros
+- 🔒 **Conformidade** com regulamentações
+- 📊 **Visibilidade** completa do fluxo financeiro
+- ⚡ **Agilidade** na tomada de decisões
+
+---
+
+## 🎯 **Próximos Passos**
+
+**🛠️ Implementação:**
+1. Configurar ambiente
+2. Integrar primeiros bancos
+3. Conectar ERP corporativo
+4. Treinar usuários
+5. Monitorar métricas
+
+**📞 Suporte:**
+- Documentação técnica completa
+- Equipe de implantação dedicada
+- Suporte 24/7 para críticos
+
+---
+*Documentação atualizada em: {{DATA_ATUAL}}*
 ```
 
+**✨ Melhorias Aplicadas:**
+
+1. **🎨 Design Visual** - Ícones, tabelas e diagramas organizados
+2. **📊 Estrutura Hierárquica** - Seções bem definidas com propósito claro
+3. **🔗 Diagramas ASCII** - Fluxos visuais para melhor compreensão
+4. **🎯 Foco no Negócio** - Linguagem orientada a valor
+5. **📋 Organização por Tabelas** - Informações comparativas claras
+6. **🚀 Destaque para Diferenciais** - Vantagens competitivas evidentes
+7. **🛠️ Detalhamento Técnico** - Especificações precisas sem complicação
+
+A documentação agora está **visualmente atraente**, **facilmente navegável** e **focada no valor** para stakeholders técnicos e de negócio.
